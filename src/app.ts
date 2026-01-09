@@ -4,6 +4,7 @@ import { logger } from './utils/logger';
 import { connectRedis, disconnectRedis, checkRedisHealth } from './config/redis';
 import { connectDatabase, disconnectDatabase, checkDatabaseHealth } from './config/database';
 import { runMigrations } from './db';
+import { orderRoutes } from './routes';
 
 /**
  * Create and configure Fastify instance
@@ -80,6 +81,10 @@ const start = async (): Promise<void> => {
     // Run database migrations
     logger.info('Running migrations...');
     await runMigrations();
+    
+    // Register routes
+    logger.info('Registering routes...');
+    await app.register(orderRoutes);
     
     // Start HTTP server
     await app.listen({ port: config.PORT, host: '0.0.0.0' });
