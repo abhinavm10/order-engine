@@ -1,26 +1,65 @@
+import { Worker } from 'bullmq';
 import { config } from './config';
 import { logger } from './utils/logger';
+import { connectRedis, disconnectRedis } from './config/redis';
+import { connectDatabase, disconnectDatabase } from './config/database';
+import { createOrderWorker, closeWorker, closeQueue } from './lib/queue';
 
-logger.info('Worker starting...');
-logger.info({
-  environment: config.NODE_ENV,
-  redisUrl: config.REDIS_URL,
-  concurrency: config.QUEUE_CONCURRENCY,
-  maxRetries: config.MAX_RETRIES,
-}, 'Worker configuration loaded');
+let worker: Worker | null = null;
 
 /**
- * Graceful shutdown handler
- * Ensures active jobs complete before exiting
+ * Start the worker process
  */
-const gracefulShutdown = async (signal: string): Promise<void> => {
-  logger.info(`Received ${signal}, shutting down worker...`);
-  
+const start = async (): Promise<void> => {
   try {
-    // TODO: Close BullMQ worker
-    // TODO: Close Redis connection
-    // TODO: Close DB connection
-    
+    logger.info({
+      config: {
+        env: config.NODE_ENV,
+        concurrency: config.QUEUE_CONCURRENCY,
+        maxRetries: config.MAX_RETRIES,
+      },
+    }, 'Starting worker...');
+
+    // Connect to Redis
+    logger.info('Connecting to Redis...');
+    await connectRedis();
+
+    // Connect to PostgreSQL
+    logger.info('Connecting to PostgreSQL...');
+    await connectDatabase();
+
+    // Start the order worker
+    logger.info('Starting order worker...');
+    worker = createOrderWorker();
+
+    logger.info('🔧 Worker is running and processing orders');
+  } catch (err) {
+    logger.error(err, 'Failed to start worker');
+    process.exit(1);
+  }
+};
+
+/**
+ * Graceful shutdown
+ */
+const shutdown = async (signal: string): Promise<void> => {
+  logger.info(`Received ${signal}, shutting down worker...`);
+
+  try {
+    // Close worker (waits for active jobs to complete)
+    if (worker) {
+      await closeWorker(worker);
+    }
+
+    // Close queue
+    await closeQueue();
+
+    // Close database
+    await disconnectDatabase();
+
+    // Close Redis
+    await disconnectRedis();
+
     logger.info('Worker shutdown complete');
     process.exit(0);
   } catch (err) {
@@ -29,12 +68,7 @@ const gracefulShutdown = async (signal: string): Promise<void> => {
   }
 };
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
-logger.info('Worker placeholder ready. Waiting for Phase 5 implementation...');
-
-// Keep process alive (placeholder - will be replaced by BullMQ worker)
-setInterval(() => {
-  // Heartbeat
-}, 10000);
+start();
