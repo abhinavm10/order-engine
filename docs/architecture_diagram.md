@@ -55,29 +55,29 @@ graph TB
 ```mermaid
 sequenceDiagram
     participant C as Client
-    participant API as Fastify API/WS
-    participant IDE as Idempotency Cache (Redis)
+    participant API as Fastify
+    participant IDE as IdempCache
     participant DB as Postgres
     participant Q as BullMQ
     participant W as Worker
     participant PS as PubSub
 
     C->>API: POST /api/orders/execute
-    API->>API: Validate body (Zod/Joi)
+    API->>API: Validate body
     API->>IDE: Check Idempotency-Key
     alt duplicate
         IDE-->>API: existing orderId
-        API-->>C: {success:true, orderId}
+        API-->>C: success, orderId
     else new
-        API->>DB: insert order (pending)
-        API->>IDE: store key->orderId (TTL 5m)
+        API->>DB: insert order pending
+        API->>IDE: store key TTL 5m
         API->>Q: enqueue job
-        API-->>C: {success:true, orderId}
+        API-->>C: success, orderId
     end
 
-    C->>API: WS connect ?orderId=...
-    API->>DB: fetch status+logs
-    API-->>C: backfill {status, logs}
+    C->>API: WS connect orderId
+    API->>DB: fetch status and logs
+    API-->>C: backfill status, logs
     API->>PS: subscribe order channel
     loop heartbeat
         API-->>C: ping
@@ -87,14 +87,14 @@ sequenceDiagram
     Q->>W: dequeue job
     W->>PS: publish routing
     API-->>C: routing
-    W->>DEX: fetch quotes (raydium/meteora)
-    W->>PS: publish building {chosen, quotes}
+    W->>W: fetch quotes
+    W->>PS: publish building
     API-->>C: building
-    W->>DEX: executeSwap (mock, delay)
-    W->>DB: update submitted/confirmed, txHash, price, logs
+    W->>W: executeSwap
+    W->>DB: update confirmed
     W->>PS: publish confirmed
     API-->>C: confirmed
-    note over W: on error -> retry with backoff; on exhaustion -> failed
+    Note over W: on error retry with backoff
 ```
 
 ### 4. Data model (orders essentials)

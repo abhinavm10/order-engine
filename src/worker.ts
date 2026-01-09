@@ -1,27 +1,40 @@
-import dotenv from 'dotenv';
+import { config } from './config';
+import { logger } from './utils/logger';
 
-// Load environment variables
-dotenv.config();
+logger.info('Worker starting...');
+logger.info({
+  environment: config.NODE_ENV,
+  redisUrl: config.REDIS_URL,
+  concurrency: config.QUEUE_CONCURRENCY,
+  maxRetries: config.MAX_RETRIES,
+}, 'Worker configuration loaded');
 
-console.log('Worker starting...');
-console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-console.log(`Redis URL: ${process.env.REDIS_URL || 'redis://localhost:6379'}`);
-
-// Placeholder for BullMQ worker
-// Will be implemented in Phase 5
-
-const gracefulShutdown = async (): Promise<void> => {
-  console.log('Received shutdown signal, closing worker...');
-  // TODO: Close BullMQ worker, Redis, and DB connections
-  process.exit(0);
+/**
+ * Graceful shutdown handler
+ * Ensures active jobs complete before exiting
+ */
+const gracefulShutdown = async (signal: string): Promise<void> => {
+  logger.info(`Received ${signal}, shutting down worker...`);
+  
+  try {
+    // TODO: Close BullMQ worker
+    // TODO: Close Redis connection
+    // TODO: Close DB connection
+    
+    logger.info('Worker shutdown complete');
+    process.exit(0);
+  } catch (err) {
+    logger.error(err, 'Error during worker shutdown');
+    process.exit(1);
+  }
 };
 
-process.on('SIGTERM', gracefulShutdown);
-process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-console.log('Worker placeholder ready. Waiting for Phase 5 implementation...');
+logger.info('Worker placeholder ready. Waiting for Phase 5 implementation...');
 
-// Keep process alive
+// Keep process alive (placeholder - will be replaced by BullMQ worker)
 setInterval(() => {
   // Heartbeat
 }, 10000);
