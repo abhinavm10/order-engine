@@ -1,16 +1,11 @@
 import { Worker, Job } from 'bullmq';
 import { config } from '../../config';
 import { logger, createOrderLogger } from '../../utils/logger';
-import { IOrderJobPayload, OrderStatus, DexProvider } from '../../types';
+import { IOrderJobPayload, OrderStatus } from '../../types';
 import { ORDER_QUEUE_NAME, ORDER_CHANNEL_PREFIX } from './producer';
 import { redisPub } from '../../config/redis';
-import {
-  updateOrderStatus,
-  updateOrderRouting,
-  updateOrderConfirmed,
-  updateOrderFailed,
-} from '../../models/order';
-import { dexRouter } from '../dex';
+import { orderService } from '../../services';
+import { updateOrderStatus } from '../../models/order';
 
 /**
  * Publish order status update via Redis PubSub
@@ -23,7 +18,7 @@ const publishStatus = async (orderId: string, status: OrderStatus, data?: Record
     timestamp: new Date().toISOString(),
     ...data,
   });
-  
+
   await redisPub.publish(channel, payload);
   logger.debug({ orderId, status, channel }, 'Status published');
 };
@@ -34,81 +29,23 @@ const publishStatus = async (orderId: string, status: OrderStatus, data?: Record
 const processOrder = async (job: Job<IOrderJobPayload>): Promise<void> => {
   const { orderId, request, correlationId } = job.data;
   const orderLogger = createOrderLogger(orderId, job.id);
-  
+
   orderLogger.info({
     attempt: job.attemptsMade + 1,
     maxAttempts: config.MAX_RETRIES,
   }, 'Processing order...');
 
   try {
-    // Step 1: Update status to ROUTING
-    await updateOrderStatus(orderId, OrderStatus.ROUTING);
+    // Publish initial routing status
     await publishStatus(orderId, OrderStatus.ROUTING);
 
-    // Step 2: Get quotes from both DEXs
-    const { raydium, meteora } = await dexRouter.getQuotes(
-      request.tokenIn,
-      request.tokenOut,
-      request.amount
-    );
+    // Delegate to order service
+    await orderService.processOrder(orderId, request);
 
-    // Step 3: Select best DEX
-    const { selectedDex, reason } = dexRouter.selectBestDex(raydium, meteora);
+    // Publish confirmed status
+    await publishStatus(orderId, OrderStatus.CONFIRMED);
 
-    // Update order with routing decision
-    await updateOrderRouting(orderId, raydium.price, meteora.price, selectedDex);
-    await publishStatus(orderId, OrderStatus.ROUTING, {
-      dex: selectedDex,
-      raydiumQuote: raydium.price,
-      meteoraQuote: meteora.price,
-      reason,
-    });
-
-    // Step 4: Update status to BUILDING
-    await updateOrderStatus(orderId, OrderStatus.BUILDING);
-    await publishStatus(orderId, OrderStatus.BUILDING, { dex: selectedDex });
-
-    // Step 5: Execute swap
-    const expectedPrice = selectedDex === DexProvider.RAYDIUM ? raydium.price : meteora.price;
-    
-    const swapResult = await dexRouter.executeSwap(
-      selectedDex,
-      request.tokenIn,
-      request.tokenOut,
-      request.amount,
-      expectedPrice,
-      request.slippage
-    );
-
-    // Step 6: Check slippage
-    const slippageCheck = dexRouter.checkSlippage(
-      expectedPrice,
-      swapResult.executedPrice,
-      request.slippage
-    );
-
-    if (!slippageCheck.passed) {
-      throw new Error(`Slippage exceeded: ${slippageCheck.actualSlippage} > ${request.slippage}`);
-    }
-
-    // Step 7: Update status to SUBMITTED
-    await updateOrderStatus(orderId, OrderStatus.SUBMITTED, { txHash: swapResult.txHash });
-    await publishStatus(orderId, OrderStatus.SUBMITTED, { txHash: swapResult.txHash });
-
-    // Step 8: Update status to CONFIRMED
-    const amountOut = (parseFloat(request.amount) * parseFloat(swapResult.executedPrice)).toFixed(9);
-    await updateOrderConfirmed(orderId, swapResult.txHash, swapResult.executedPrice, amountOut);
-    await publishStatus(orderId, OrderStatus.CONFIRMED, {
-      txHash: swapResult.txHash,
-      executedPrice: swapResult.executedPrice,
-      amountOut,
-    });
-
-    orderLogger.info({
-      txHash: swapResult.txHash,
-      executedPrice: swapResult.executedPrice,
-      dex: selectedDex,
-    }, 'Order completed successfully');
+    orderLogger.info('Order completed successfully');
 
   } catch (err) {
     const error = err as Error;
@@ -116,7 +53,7 @@ const processOrder = async (job: Job<IOrderJobPayload>): Promise<void> => {
 
     // Check if this is the final attempt
     if (job.attemptsMade + 1 >= config.MAX_RETRIES) {
-      await updateOrderFailed(orderId, error.message, job.attemptsMade + 1, config.MAX_RETRIES);
+      await orderService.failOrder(orderId, error.message, job.attemptsMade + 1, config.MAX_RETRIES);
       await publishStatus(orderId, OrderStatus.FAILED, {
         failureReason: error.message,
         attempt: job.attemptsMade + 1,
