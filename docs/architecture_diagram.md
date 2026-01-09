@@ -11,17 +11,17 @@
 ```mermaid
 graph TB
     subgraph Client Layer
-        Client[Client<br/>(Frontend / Postman)]
+        Client["Client - Frontend/Postman"]
     end
 
     subgraph API Layer
-        API[Fastify API<br/>HTTP + WebSocket]
+        API["Fastify API - HTTP + WebSocket"]
     end
 
-    subgraph Queue & PubSub
-        Q[(Redis Queue<br/>BullMQ)]
-        PS[(Redis PubSub)]
-        IDEMP[(Redis Keyspace<br/>Idempotency + Rate Limits)]
+    subgraph Queue and PubSub
+        Q[("Redis Queue - BullMQ")]
+        PS[("Redis PubSub")]
+        IDEMP[("Redis Keyspace - Idempotency")]
     end
 
     subgraph Worker Layer
@@ -29,15 +29,15 @@ graph TB
     end
 
     subgraph Data Layer
-        DB[(PostgreSQL<br/>Orders)]
+        DB[("PostgreSQL - Orders")]
     end
 
     subgraph DEX Simulation
-        DEX[MockDexRouter<br/>Raydium + Meteora]
+        DEX["MockDexRouter - Raydium + Meteora"]
     end
 
-    Client -->|HTTP: POST /api/orders/execute| API
-    Client <-->|WS: /api/orders/execute?orderId=...| API
+    Client -->|HTTP POST| API
+    Client <-->|WebSocket| API
 
     API --> Q
     API --> PS
