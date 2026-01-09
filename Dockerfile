@@ -33,6 +33,7 @@ RUN npm ci --only=production && npm cache clean --force
 
 # Copy built files from builder
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/src/db/migrations ./dist/db/migrations
 
 # Change ownership
 RUN chown -R nodejs:nodejs /app
