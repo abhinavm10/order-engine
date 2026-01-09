@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build output
+dist/
+build/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Testing
+coverage/
+.nyc_output/
+
+# Docker volumes (local)
+pgdata/
+
+# Internal planning docs (not for public repo)
+docs/GEMINI.md
+docs/implementation_plan.md
+docs/PRD.md
+docs/Backend Task 2_ Order Execution Engine.md
+
+# Temporary/scratch files
+*.tmp
+*.temp
+scratch/
+
+# Original task documents
+Backend Task 2_ Order Execution Engine.docx
+Backend Task 2_ Order Execution Engine.pdf
+Backend Task 2_ Order Execution Engine.md
+vertopal.com_Backend Task 2_ Order Execution Engine.json
+jsonformatter.txt
