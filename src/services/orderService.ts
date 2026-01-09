@@ -4,6 +4,7 @@ import { IOrderRequest, IOrder, OrderStatus, DexProvider } from '../types';
 import { createOrder, getOrderById, updateOrderStatus, updateOrderRouting, updateOrderConfirmed, updateOrderFailed } from '../models/order';
 import { enqueueOrder, isQueueOverloaded } from '../lib/queue';
 import { dexRouter } from '../lib/dex';
+import { metricsService } from './metricsService';
 
 /**
  * Order Service - Business logic for order operations
@@ -72,15 +73,20 @@ export class OrderService {
   async processOrder(orderId: string, request: IOrderRequest): Promise<void> {
     logger.info({ orderId }, 'Processing order...');
 
+    // Start timers for metrics
+    const startTime = Date.now();
+    
     // Step 1: Update status to ROUTING
     await updateOrderStatus(orderId, OrderStatus.ROUTING);
 
     // Step 2: Get quotes from both DEXs (Timeout: 5s)
+    const quoteStart = Date.now();
     const { raydium, meteora } = await this.withTimeout(
       dexRouter.getQuotes(request.tokenIn, request.tokenOut, request.amount),
       5000,
       'Quote fetching'
     );
+    metricsService.recordLatency('quote', Date.now() - quoteStart);
 
     // Step 3: Select best DEX
     const { selectedDex, reason } = dexRouter.selectBestDex(raydium, meteora);
@@ -96,6 +102,7 @@ export class OrderService {
     // Step 5: Execute swap (Timeout: 10s)
     const expectedPrice = selectedDex === DexProvider.RAYDIUM ? raydium.price : meteora.price;
 
+    const execStart = Date.now();
     const swapResult = await this.withTimeout(
       dexRouter.executeSwap(
         selectedDex,
@@ -108,6 +115,7 @@ export class OrderService {
       10000,
       'Swap execution'
     );
+    metricsService.recordLatency('execution', Date.now() - execStart);
 
     // Step 6: Check slippage
     const slippageCheck = dexRouter.checkSlippage(
@@ -127,11 +135,13 @@ export class OrderService {
     const amountOut = (parseFloat(request.amount) * parseFloat(swapResult.executedPrice)).toFixed(9);
     await updateOrderConfirmed(orderId, swapResult.txHash, swapResult.executedPrice, amountOut);
 
+    metricsService.increment('orders_completed');
     logger.info({
       orderId,
       txHash: swapResult.txHash,
       executedPrice: swapResult.executedPrice,
       dex: selectedDex,
+      duration: Date.now() - startTime,
     }, 'Order completed successfully');
   }
 
@@ -140,6 +150,7 @@ export class OrderService {
    */
   async failOrder(orderId: string, reason: string, attempt?: number, maxAttempts?: number): Promise<void> {
     await updateOrderFailed(orderId, reason, attempt, maxAttempts);
+    metricsService.increment('orders_failed');
     logger.warn({ orderId, reason, attempt, maxAttempts }, 'Order marked as failed');
   }
 }

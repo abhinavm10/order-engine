@@ -2,6 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { isQueueOverloaded, getQueueHealth } from '../lib/queue';
 import { logger } from '../utils/logger';
 import { ErrorCode } from '../types';
+import { metricsService } from '../services';
 
 const QUEUE_DEPTH_THRESHOLD = 100;
 
@@ -24,6 +25,8 @@ export const backpressureMiddleware = async (
         queueHealth: health,
         threshold: QUEUE_DEPTH_THRESHOLD,
       }, 'System overloaded, rejecting request');
+
+      metricsService.increment('orders_rejected');
 
       reply.header('Retry-After', 30); // Suggest retry after 30 seconds
       reply.status(503).send({

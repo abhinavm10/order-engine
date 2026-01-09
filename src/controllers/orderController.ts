@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { validateOrderRequest } from '../schemas';
-import { orderService } from '../services';
+import { orderService, metricsService } from '../services';
 import { storeIdempotencyResult } from '../middleware';
 import { logger } from '../utils/logger';
 import { ErrorCode, IOrderRequest, IApiError, IOrderResponse, OrderType } from '../types';
@@ -52,6 +52,7 @@ export class OrderController {
 
       // Submit order via service
       const { orderId } = await orderService.submitOrder(orderRequest, correlationId);
+      metricsService.increment('orders_total');
 
       // Store idempotency result if key was provided
       if (idempotencyKey && idempotencyBodyHash) {
