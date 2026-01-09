@@ -1,6 +1,8 @@
 import Fastify from 'fastify';
 import { config } from './config';
 import { logger } from './utils/logger';
+import { connectRedis, disconnectRedis, checkRedisHealth } from './config/redis';
+import { connectDatabase, disconnectDatabase, checkDatabaseHealth } from './config/database';
 
 /**
  * Create and configure Fastify instance
@@ -33,10 +35,21 @@ app.addHook('onResponse', async (request, reply) => {
 
 // Health check endpoint - used by Docker and load balancers
 app.get('/health', async () => {
+  const [redisHealthy, dbHealthy] = await Promise.all([
+    checkRedisHealth(),
+    checkDatabaseHealth(),
+  ]);
+
+  const status = redisHealthy && dbHealthy ? 'ok' : 'degraded';
+  
   return {
-    status: 'ok',
+    status,
     timestamp: new Date().toISOString(),
     environment: config.NODE_ENV,
+    services: {
+      redis: redisHealthy ? 'healthy' : 'unhealthy',
+      postgres: dbHealthy ? 'healthy' : 'unhealthy',
+    },
   };
 });
 
@@ -50,12 +63,20 @@ app.get('/', async () => {
 });
 
 /**
- * Start the server
+ * Start the server with all connections
  */
 const start = async (): Promise<void> => {
   try {
     logger.info({ config: { port: config.PORT, env: config.NODE_ENV } }, 'Starting server...');
     
+    // Connect to services
+    logger.info('Connecting to Redis...');
+    await connectRedis();
+    
+    logger.info('Connecting to PostgreSQL...');
+    await connectDatabase();
+    
+    // Start HTTP server
     await app.listen({ port: config.PORT, host: '0.0.0.0' });
     
     logger.info(`🚀 Server running on http://localhost:${config.PORT}`);
@@ -66,13 +87,24 @@ const start = async (): Promise<void> => {
   }
 };
 
-// Graceful shutdown
+/**
+ * Graceful shutdown - close all connections
+ */
 const shutdown = async (signal: string): Promise<void> => {
   logger.info(`Received ${signal}, shutting down gracefully...`);
   
   try {
+    // Close HTTP server first (stop accepting new requests)
     await app.close();
-    logger.info('Server closed');
+    logger.info('HTTP server closed');
+    
+    // Close database connections
+    await disconnectDatabase();
+    
+    // Close Redis connections
+    await disconnectRedis();
+    
+    logger.info('Shutdown complete');
     process.exit(0);
   } catch (err) {
     logger.error(err, 'Error during shutdown');
