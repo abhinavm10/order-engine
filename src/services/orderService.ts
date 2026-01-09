@@ -49,6 +49,24 @@ export class OrderService {
   }
 
   /**
+   * Helper to wrap promise with timeout
+   */
+  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
+    let timer: NodeJS.Timeout;
+    const timeoutPromise = new Promise<T>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error(`${operation} timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+    });
+
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      clearTimeout(timer!);
+    }
+  }
+
+  /**
    * Process an order (called by worker)
    */
   async processOrder(orderId: string, request: IOrderRequest): Promise<void> {
@@ -57,11 +75,11 @@ export class OrderService {
     // Step 1: Update status to ROUTING
     await updateOrderStatus(orderId, OrderStatus.ROUTING);
 
-    // Step 2: Get quotes from both DEXs
-    const { raydium, meteora } = await dexRouter.getQuotes(
-      request.tokenIn,
-      request.tokenOut,
-      request.amount
+    // Step 2: Get quotes from both DEXs (Timeout: 5s)
+    const { raydium, meteora } = await this.withTimeout(
+      dexRouter.getQuotes(request.tokenIn, request.tokenOut, request.amount),
+      5000,
+      'Quote fetching'
     );
 
     // Step 3: Select best DEX
@@ -75,16 +93,20 @@ export class OrderService {
     // Step 4: Update status to BUILDING
     await updateOrderStatus(orderId, OrderStatus.BUILDING);
 
-    // Step 5: Execute swap
+    // Step 5: Execute swap (Timeout: 10s)
     const expectedPrice = selectedDex === DexProvider.RAYDIUM ? raydium.price : meteora.price;
 
-    const swapResult = await dexRouter.executeSwap(
-      selectedDex,
-      request.tokenIn,
-      request.tokenOut,
-      request.amount,
-      expectedPrice,
-      request.slippage
+    const swapResult = await this.withTimeout(
+      dexRouter.executeSwap(
+        selectedDex,
+        request.tokenIn,
+        request.tokenOut,
+        request.amount,
+        expectedPrice,
+        request.slippage
+      ),
+      10000,
+      'Swap execution'
     );
 
     // Step 6: Check slippage

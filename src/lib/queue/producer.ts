@@ -41,7 +41,7 @@ export const orderQueue = new Queue<IOrderJobPayload>(ORDER_QUEUE_NAME, {
  * Add an order job to the queue
  */
 export const enqueueOrder = async (payload: IOrderJobPayload): Promise<string> => {
-  const job = await orderQueue.add('process-order', payload, {
+  const job = await orderQueue.add('process-order' as any, payload, {
     jobId: payload.orderId, // Use orderId as jobId for easy lookup
   });
 

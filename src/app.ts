@@ -97,6 +97,8 @@ const start = async (): Promise<void> => {
   }
 };
 
+import { closeQueue } from './lib/queue';
+
 /**
  * Graceful shutdown - close all connections
  */
@@ -107,6 +109,9 @@ const shutdown = async (signal: string): Promise<void> => {
     // Close HTTP server first (stop accepting new requests)
     await app.close();
     logger.info('HTTP server closed');
+
+    // Close Queue producer
+    await closeQueue();
     
     // Close database connections
     await disconnectDatabase();
