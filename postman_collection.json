@@ -1,0 +1,377 @@
+{
+  "info": {
+    "name": "Order Execution Engine API",
+    "description": "Comprehensive API collection for the Order Execution Engine deployed on Railway. Includes order submission, WebSocket streaming, and health monitoring endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "order-engine-api-v1"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://order-engine-production-4040.up.railway.app",
+      "type": "string"
+    },
+    {
+      "key": "wsUrl",
+      "value": "wss://order-engine-production-4040.up.railway.app",
+      "type": "string"
+    },
+    {
+      "key": "orderId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Execute Market Order (SOL → USDC)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Save orderId for WebSocket connection",
+                  "const response = pm.response.json();",
+                  "if (response.success && response.orderId) {",
+                  "    pm.collectionVariables.set('orderId', response.orderId);",
+                  "    console.log('Order ID saved:', response.orderId);",
+                  "}",
+                  "",
+                  "// Validate response",
+                  "pm.test('Status code is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains orderId', () => {",
+                  "    pm.expect(response).to.have.property('orderId');",
+                  "    pm.expect(response.orderId).to.be.a('string');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "description": "Prevents duplicate order submissions"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"market\",\n  \"tokenIn\": \"SOL\",\n  \"tokenOut\": \"USDC\",\n  \"amount\": \"1.5\",\n  \"slippage\": \"0.01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/execute",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "execute"]
+            },
+            "description": "Submits a market order to swap 1.5 SOL for USDC with 1% slippage tolerance."
+          },
+          "response": []
+        },
+        {
+          "name": "Execute Market Order (USDC → SOL)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "if (response.success && response.orderId) {",
+                  "    pm.collectionVariables.set('orderId', response.orderId);",
+                  "}",
+                  "",
+                  "pm.test('Status code is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"market\",\n  \"tokenIn\": \"USDC\",\n  \"tokenOut\": \"SOL\",\n  \"amount\": \"100\",\n  \"slippage\": \"0.015\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/execute",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "execute"]
+            },
+            "description": "Submits a market order to swap 100 USDC for SOL with 1.5% slippage tolerance."
+          },
+          "response": []
+        },
+        {
+          "name": "Execute Large Order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "if (response.success && response.orderId) {",
+                  "    pm.collectionVariables.set('orderId', response.orderId);",
+                  "}",
+                  "",
+                  "pm.test('Status code is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"market\",\n  \"tokenIn\": \"SOL\",\n  \"tokenOut\": \"USDC\",\n  \"amount\": \"50\",\n  \"slippage\": \"0.02\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/execute",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "execute"]
+            },
+            "description": "Tests routing logic with a larger order size (50 SOL)."
+          },
+          "response": []
+        },
+        {
+          "name": "Test Idempotency (Duplicate Request)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "test-idempotency-12345",
+                "description": "Fixed key to test duplicate prevention"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"market\",\n  \"tokenIn\": \"SOL\",\n  \"tokenOut\": \"USDC\",\n  \"amount\": \"1\",\n  \"slippage\": \"0.01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/execute",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "execute"]
+            },
+            "description": "Run this request twice with the same Idempotency-Key to verify that the second request returns the existing order instead of creating a new one."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Order Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/{{orderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "{{orderId}}"]
+            },
+            "description": "Retrieves the current status and details of a specific order by ID. Uses the orderId saved from a previous order submission."
+          },
+          "response": []
+        }
+      ],
+      "description": "Endpoints for creating and managing orders"
+    },
+    {
+      "name": "Health & Monitoring",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Basic health check endpoint to verify the API is running."
+          },
+          "response": []
+        },
+        {
+          "name": "Queue Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/metrics/queue",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "metrics", "queue"]
+            },
+            "description": "Returns real-time metrics about the job queue (waiting, active, completed, failed counts)."
+          },
+          "response": []
+        },
+        {
+          "name": "System Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/metrics",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "metrics"]
+            },
+            "description": "Returns comprehensive system metrics including orders processed, success rates, and performance statistics."
+          },
+          "response": []
+        }
+      ],
+      "description": "System health and monitoring endpoints"
+    },
+    {
+      "name": "Validation Tests",
+      "item": [
+        {
+          "name": "Invalid Order Type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"invalid_type\",\n  \"tokenIn\": \"SOL\",\n  \"tokenOut\": \"USDC\",\n  \"amount\": \"1\",\n  \"slippage\": \"0.01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/execute",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "execute"]
+            },
+            "description": "Tests validation by submitting an invalid order type. Should return 400 Bad Request."
+          },
+          "response": []
+        },
+        {
+          "name": "Negative Amount",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"market\",\n  \"tokenIn\": \"SOL\",\n  \"tokenOut\": \"USDC\",\n  \"amount\": \"-5\",\n  \"slippage\": \"0.01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/execute",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "execute"]
+            },
+            "description": "Tests validation by submitting a negative amount. Should return 400 Bad Request."
+          },
+          "response": []
+        },
+        {
+          "name": "Excessive Slippage",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"market\",\n  \"tokenIn\": \"SOL\",\n  \"tokenOut\": \"USDC\",\n  \"amount\": \"1\",\n  \"slippage\": \"0.5\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/execute",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "execute"]
+            },
+            "description": "Tests validation by submitting excessive slippage (50%). Should return 400 Bad Request."
+          },
+          "response": []
+        },
+        {
+          "name": "Same Token Pair",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"market\",\n  \"tokenIn\": \"SOL\",\n  \"tokenOut\": \"SOL\",\n  \"amount\": \"1\",\n  \"slippage\": \"0.01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/execute",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "execute"]
+            },
+            "description": "Tests validation by trying to swap the same token. Should return 400 Bad Request."
+          },
+          "response": []
+        }
+      ],
+      "description": "Tests for input validation and error handling"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global pre-request script",
+          "console.log('Request to:', pm.request.url.toString());"
+        ]
+      }
+    }
+  ]
+}

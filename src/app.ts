@@ -5,8 +5,12 @@ import { connectRedis, disconnectRedis, checkRedisHealth } from './config/redis'
 import { connectDatabase, disconnectDatabase, checkDatabaseHealth } from './config/database';
 import { runMigrations } from './db';
 import { orderRoutes } from './routes';
-import { closeQueue } from './lib/queue';
+import { closeQueue, createOrderWorker, closeWorker } from './lib/queue';
+import { Worker } from 'bullmq';
 import crypto from 'crypto';
+
+// Worker instance for graceful shutdown
+let orderWorker: Worker | null = null;
 
 /**
  * Build and configure Fastify instance
@@ -100,6 +104,11 @@ const start = async (): Promise<void> => {
     logger.info(`🚀 Server running on http://localhost:${config.PORT}`);
     logger.info(`📊 Environment: ${config.NODE_ENV}`);
 
+    // Start the order worker in the same process
+    logger.info('Starting order worker...');
+    orderWorker = createOrderWorker();
+    logger.info('🔧 Worker is running and processing orders');
+
     // Graceful shutdown handling (inside start scope)
     const shutdown = async (signal: string): Promise<void> => {
       logger.info(`Received ${signal}, shutting down gracefully...`);
@@ -107,6 +116,10 @@ const start = async (): Promise<void> => {
       try {
         await app.close();
         logger.info('HTTP server closed');
+        if (orderWorker) {
+          await closeWorker(orderWorker);
+          logger.info('Order worker closed');
+        }
         await closeQueue();
         await disconnectDatabase();
         await disconnectRedis();

@@ -2,6 +2,40 @@
 
 A high-performance, asynchronous order execution engine designed for the Solana blockchain. This system routes orders to the optimal Decentralized Exchange (DEX) by comparing real-time quotes from Raydium and Meteora, handling high concurrency through a reliable queue system, and providing real-time status updates via WebSockets.
 
+## 🚀 Live Deployment
+
+**Production URL**: [https://order-engine-production-4040.up.railway.app](https://order-engine-production-4040.up.railway.app)
+
+**API Documentation**:
+
+- [Postman Collection](./postman_collection.json) - Import this into Postman for instant API testing
+- [WebSocket Streaming Guide](./docs/WEBSOCKET_GUIDE.md) - Complete guide for real-time order updates
+
+### Quick Start
+
+**Test the API immediately:**
+
+```bash
+# Submit a market order
+curl -X POST https://order-engine-production-4040.up.railway.app/api/orders/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "market",
+    "tokenIn": "SOL",
+    "tokenOut": "USDC",
+    "amount": "1.5",
+    "slippage": "0.01"
+  }'
+```
+
+**Or use Postman:**
+
+1. Download [postman_collection.json](./postman_collection.json)
+2. Import into Postman (File → Import)
+3. Run "Execute Market Order (SOL → USDC)" request
+4. Create a WebSocket request with URL: `wss://order-engine-production-4040.up.railway.app/api/orders/execute?orderId={{orderId}}`
+5. Watch real-time status updates!
+
 ## Table of Contents
 
 1. [Architectural Overview](#architectural-overview)
@@ -49,14 +83,14 @@ graph TB
     %% Flows
     Client -->|POST /execute| API
     Client <-->|WebSocket Connection| WS
-    
+
     API -->|Validate & Persist| Postgres
     API -->|Enqueue Job| RedisQ
-    
+
     RedisQ -->|Dequeue| Worker
     Worker -->|Fetch Quotes| Router
     Router -->|Raydium/Meteora| Sim
-    
+
     Worker -->|Update Status| Postgres
     Worker -->|Publish Event| RedisPubSub
     RedisPubSub -->|Stream Update| WS
@@ -65,28 +99,117 @@ graph TB
 
 ### Key Components
 
-*   **API Service**: A lightweight Fastify server that accepts orders, performs validation, checks for idempotency, and manages WebSocket connections.
-*   **Worker Service**: A dedicated background process that consumes jobs from the queue. It is responsible for the CPU-intensive tasks of routing, price comparison, and transaction simulation.
-*   **Redis**: Acts as the backbone for both the job queue (BullMQ) and the real-time event bus (PubSub).
-*   **PostgreSQL**: Provides persistent storage for order history and audit logs.
+- **API Service**: A lightweight Fastify server that accepts orders, performs validation, checks for idempotency, and manages WebSocket connections.
+- **Worker Service**: A dedicated background process that consumes jobs from the queue. It is responsible for the CPU-intensive tasks of routing, price comparison, and transaction simulation.
+- **Redis**: Acts as the backbone for both the job queue (BullMQ) and the real-time event bus (PubSub).
+- **PostgreSQL**: Provides persistent storage for order history and audit logs.
+
+---
+
+## Project Structure
+
+```text
+eterna_backend/
+├── src/
+│   ├── app.ts                   # API Application Entry Point
+│   ├── worker.ts                # Worker Process Entry Point
+│   ├── config/                  # Configuration & Environment Validation
+│   │   ├── index.ts             # Centralized config exports
+│   │   ├── postgres.ts          # PostgreSQL connection setup
+│   │   └── redis.ts             # Redis client configuration
+│   ├── controllers/             # HTTP Request Handlers
+│   │   ├── orderController.ts   # Order execution endpoint logic
+│   │   └── metricsController.ts # Metrics & monitoring endpoints
+│   ├── db/                      # Database Management
+│   │   ├── migrations/          # SQL migration files
+│   │   └── seed.ts              # Database seeding scripts
+│   ├── lib/                     # Core Libraries
+│   │   ├── dex/                 # DEX Integration Layer
+│   │   │   ├── mockDexRouter.ts # Mock DEX price comparison
+│   │   │   ├── raydiumSimulator.ts
+│   │   │   └── meteoraSimulator.ts
+│   │   └── queue/               # Job Queue Management
+│   │       ├── producer.ts      # BullMQ job producer
+│   │       ├── consumer.ts      # BullMQ job consumer/worker
+│   │       └── index.ts
+│   ├── middleware/              # Express/Fastify Middleware
+│   │   ├── backpressure.ts      # Queue overload protection
+│   │   ├── errorHandler.ts      # Global error handling
+│   │   ├── idempotency.ts       # Duplicate request prevention
+│   │   └── rateLimit.ts         # Rate limiting logic
+│   ├── models/                  # Database Access Layer
+│   │   └── order.ts             # Order CRUD operations
+│   ├── routes/                  # API Route Definitions
+│   │   ├── index.ts             # Route aggregator
+│   │   ├── orderRoutes.ts       # Order-related routes
+│   │   └── metricsRoutes.ts     # Metrics routes
+│   ├── schemas/                 # Validation Schemas
+│   │   ├── orderSchema.ts       # Zod schemas for orders
+│   │   └── index.ts
+│   ├── services/                # Business Logic Layer
+│   │   ├── index.ts             # Service exports
+│   │   ├── orderService.ts      # Order processing logic
+│   │   ├── websocketService.ts  # WebSocket connection management
+│   │   └── metricsService.ts    # Application metrics tracking
+│   ├── types/                   # TypeScript Type Definitions
+│   │   └── index.ts             # Shared types & interfaces
+│   └── utils/                   # Utility Functions
+│       └── logger.ts            # Structured logging (pino)
+├── tests/
+│   ├── integration/             # API Integration Tests
+│   │   ├── orderExecution.test.ts
+│   │   └── websocket.test.ts
+│   └── unit/                    # Unit Tests
+│       ├── orderService.test.ts
+│       ├── mockDexRouter.test.ts
+│       └── idempotency.test.ts
+├── docs/
+│   ├── Backend Task 2_ Order Execution Engine.md
+│   └── WEBSOCKET_GUIDE.md       # WebSocket streaming documentation
+├── scripts/                     # Utility Scripts
+│   └── seed-db.ts               # Database seeding script
+├── .env.example                 # Environment variables template
+├── docker-compose.yml           # Docker services configuration
+├── Dockerfile                   # Container build instructions
+├── package.json                 # Dependencies & scripts
+├── tsconfig.json                # TypeScript configuration
+├── vitest.config.ts             # Vitest test configuration
+├── postman_collection.json      # Postman API collection
+├── POSTMAN_README.md            # Postman usage guide
+└── README.md                    # This file
+```
+
+### Key Directories Explained
+
+- **`src/config/`**: Centralized configuration with validation for all environment variables
+- **`src/lib/dex/`**: Mock DEX simulators that mimic Raydium/Meteora quote APIs with realistic delays
+- **`src/lib/queue/`**: BullMQ integration for asynchronous order processing with retry logic
+- **`src/middleware/`**: Cross-cutting concerns like idempotency, rate limiting, and backpressure
+- **`src/services/`**: Core business logic isolated from HTTP concerns for easier testing
+- **`tests/`**: Comprehensive test suite with unit and integration tests (>10 tests total)
 
 ---
 
 ## Design Decisions
 
 ### 1. Fastify over Express
+
 We selected Fastify for its low overhead and built-in support for asynchronous request handling. Its plugin architecture allowed for clean integration of WebSocket support (`@fastify/websocket`) and shared schema validation.
 
 ### 2. BullMQ for Job Management
+
 Blockchain transactions are inherently asynchronous and prone to network latency. Using an in-memory approach would risk data loss during server restarts. BullMQ provides:
-*   **Persistence**: Jobs are stored in Redis, surviving process crashes.
-*   **Concurrency Control**: We strictly limit concurrent executions to 10 to prevent rate-limiting from RPC nodes.
-*   **Exponential Backoff**: Automatic retries (2s, 4s, 8s) for transient network failures.
+
+- **Persistence**: Jobs are stored in Redis, surviving process crashes.
+- **Concurrency Control**: We strictly limit concurrent executions to 10 to prevent rate-limiting from RPC nodes.
+- **Exponential Backoff**: Automatic retries (2s, 4s, 8s) for transient network failures.
 
 ### 3. Redis PubSub for Real-Time Updates
+
 Polling the database for order status is inefficient. We implemented a PubSub pattern where the Worker publishes events to a specific channel (`order:status:{id}`). The API subscribes to this channel only when a client connects via WebSocket, ensuring efficient resource usage.
 
 ### 4. Idempotency Keys
+
 To prevent double-spending or duplicate orders caused by network retries, every order request is hashed. If a request with the same `Idempotency-Key` and payload hash is received within 5 minutes, the system returns the existing order status instead of creating a new one.
 
 ---
@@ -102,8 +225,9 @@ Market orders represent the fundamental atomic unit of a trading engine—immedi
 
 **Extensibility:**
 The architecture allows for seamless addition of other types:
-*   **Limit Orders**: Would involve a new "Price Watcher" service that polls price feeds and only enqueues the job into BullMQ when the target price is triggered.
-*   **Sniper Orders**: Would involve listening to mempool or block events to trigger execution in the same block as a liquidity provision event.
+
+- **Limit Orders**: Would involve a new "Price Watcher" service that polls price feeds and only enqueues the job into BullMQ when the target price is triggered.
+- **Sniper Orders**: Would involve listening to mempool or block events to trigger execution in the same block as a liquidity provision event.
 
 ---
 
@@ -121,8 +245,8 @@ The architecture allows for seamless addition of other types:
 
 ## Prerequisites
 
-*   **Node.js**: v18 LTS or higher
-*   **Docker & Docker Compose**: Required for running the local infrastructure stack.
+- **Node.js**: v18 LTS or higher
+- **Docker & Docker Compose**: Required for running the local infrastructure stack.
 
 ---
 
@@ -186,8 +310,9 @@ docker-compose up --build
 Submits a new order for execution.
 
 **Headers**:
-*   `Content-Type`: `application/json`
-*   `Idempotency-Key` (Optional): Unique string (UUID recommended)
+
+- `Content-Type`: `application/json`
+- `Idempotency-Key` (Optional): Unique string (UUID recommended)
 
 **Request Body**:
 
@@ -246,8 +371,8 @@ Streamed whenever the order status changes.
 
 The project utilizes **Vitest** for a fast and unified testing experience.
 
-*   **Unit Tests**: Located in `tests/unit/`. These mock all external dependencies (DB, Redis) to verify business logic, routing calculations, and slippage protection.
-*   **Integration Tests**: Located in `tests/integration/`. These spin up the API instance and verify the HTTP endpoints and validation logic.
+- **Unit Tests**: Located in `tests/unit/`. These mock all external dependencies (DB, Redis) to verify business logic, routing calculations, and slippage protection.
+- **Integration Tests**: Located in `tests/integration/`. These spin up the API instance and verify the HTTP endpoints and validation logic.
 
 **Run all tests**:
 
@@ -256,20 +381,3 @@ npm test
 ```
 
 ---
-
-## Project Structure
-
-```text
-src/
-├── app.ts                  # API Application Entry Point
-├── worker.ts               # Worker Process Entry Point
-├── config/                 # Configuration and Env Validation
-├── controllers/            # HTTP Request Handlers
-├── services/               # Core Business Logic (Order, WebSocket, Metrics)
-├── routes/                 # Route Definitions
-├── lib/
-│   ├── dex/                # Mock DEX Router and Simulators
-│   └── queue/              # BullMQ Producer and Consumer Setup
-├── models/                 # Database Access Layer (Repositories)
-└── middleware/             # Idempotency, Rate Limiting, Backpressure
-```
