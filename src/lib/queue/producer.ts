@@ -21,6 +21,7 @@ export const orderQueue = new Queue<IOrderJobPayload>(ORDER_QUEUE_NAME, {
   connection: {
     host: new URL(config.REDIS_URL).hostname,
     port: parseInt(new URL(config.REDIS_URL).port || '6379'),
+    password: new URL(config.REDIS_URL).password || undefined,
   },
   defaultJobOptions: {
     attempts: config.MAX_RETRIES,

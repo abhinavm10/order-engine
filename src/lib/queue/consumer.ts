@@ -85,6 +85,7 @@ export const createOrderWorker = (): Worker<IOrderJobPayload> => {
       connection: {
         host: new URL(config.REDIS_URL).hostname,
         port: parseInt(new URL(config.REDIS_URL).port || '6379'),
+        password: new URL(config.REDIS_URL).password || undefined,
       },
       concurrency: config.QUEUE_CONCURRENCY,
       limiter: {
