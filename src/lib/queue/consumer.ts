@@ -40,10 +40,10 @@ const processOrder = async (job: Job<IOrderJobPayload>): Promise<void> => {
     await publishStatus(orderId, OrderStatus.ROUTING);
 
     // Delegate to order service
-    await orderService.processOrder(orderId, request);
+    const result = await orderService.processOrder(orderId, request);
 
     // Publish confirmed status
-    await publishStatus(orderId, OrderStatus.CONFIRMED);
+    await publishStatus(orderId, OrderStatus.CONFIRMED, result);
 
     orderLogger.info('Order completed successfully');
 

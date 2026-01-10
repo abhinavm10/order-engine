@@ -70,7 +70,7 @@ export class OrderService {
   /**
    * Process an order (called by worker)
    */
-  async processOrder(orderId: string, request: IOrderRequest): Promise<void> {
+  async processOrder(orderId: string, request: IOrderRequest): Promise<{ txHash: string; executedPrice: string; amountOut: string }> {
     logger.info({ orderId }, 'Processing order...');
 
     // Start timers for metrics
@@ -143,6 +143,12 @@ export class OrderService {
       dex: selectedDex,
       duration: Date.now() - startTime,
     }, 'Order completed successfully');
+
+    return {
+      txHash: swapResult.txHash,
+      executedPrice: swapResult.executedPrice,
+      amountOut,
+    };
   }
 
   /**
