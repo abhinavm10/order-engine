@@ -1,35 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { WebSocketService } from '../../src/services/webSocketService';
-
-// Mock Redis
-vi.mock('../../src/config/redis', () => ({
-  redis: {
-    get: vi.fn(),
-    incr: vi.fn(),
-    decr: vi.fn(),
-    expire: vi.fn(),
-  },
-  redisSub: {
-    subscribe: vi.fn(),
-    unsubscribe: vi.fn(),
-    on: vi.fn(),
-    off: vi.fn(),
-  },
-}));
-
-vi.mock('../../src/models/order', () => ({
-  getOrderById: vi.fn().mockResolvedValue({
-    orderId: 'test-order',
-    status: 'PENDING',
-    logs: [],
-  }),
-}));
+import { getOrderById } from '../../src/models/order';
 
 describe('WebSocketService', () => {
   let service: WebSocketService;
   let mockSocket: any;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     service = new WebSocketService();
     mockSocket = {
       send: vi.fn(),
@@ -39,6 +17,19 @@ describe('WebSocketService', () => {
       ping: vi.fn(),
       readyState: 1, // OPEN
     };
+
+    // Override the global mock for getOrderById for specific WebSocket tests
+    vi.mocked(getOrderById).mockResolvedValue({
+      id: 'test-order',
+      status: 'pending' as any,
+      tokenIn: 'SOL',
+      tokenOut: 'USDC',
+      amountIn: '1.0',
+      slippage: '0.01',
+      logs: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
   });
 
   describe('handleConnection', () => {
@@ -54,9 +45,8 @@ describe('WebSocketService', () => {
 
     it('should setup heartbeat', async () => {
       await service.handleConnection(mockSocket, 'test-order', '127.0.0.1');
-      
-      // We can't easily test setInterval/setTimeout without fake timers
-      // But we can verify logic flow executes without error
+      // Smoke test for method execution
+      expect(mockSocket.on).toHaveBeenCalledWith('pong', expect.any(Function));
     });
   });
 });

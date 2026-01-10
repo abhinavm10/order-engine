@@ -100,8 +100,13 @@ describe('OrderService', () => {
         slippage: '0.001', // Very tight slippage
       } as any;
 
-      // Mock failure scenario
-      vi.mocked(dexRouter.getQuotes).mockResolvedValue({} as any);
+      // Mock complete DEX response
+      const mockQuotes = {
+        raydium: { dex: DexProvider.RAYDIUM, price: '100', fee: '0.003' },
+        meteora: { dex: DexProvider.METEORA, price: '100', fee: '0.002' },
+      };
+
+      vi.mocked(dexRouter.getQuotes).mockResolvedValue(mockQuotes as any);
       vi.mocked(dexRouter.selectBestDex).mockReturnValue({ selectedDex: DexProvider.RAYDIUM } as any);
       vi.mocked(dexRouter.executeSwap).mockResolvedValue({ executedPrice: '90' } as any); // Huge drop
       vi.mocked(dexRouter.checkSlippage).mockReturnValue({

@@ -5,6 +5,7 @@ export default defineConfig({
   test: {
     globals: true, // Allow describe, test, it, expect without imports
     environment: 'node',
+    setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.test.ts'],
     coverage: {
       provider: 'v8',

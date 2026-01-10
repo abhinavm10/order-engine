@@ -1,61 +1,76 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import supertest from 'supertest';
-import { buildApp } from '../../src/app';
 import { OrderType } from '../../src/types';
-
-// Mock DB and Redis connections
-vi.mock('../../src/config/redis', () => ({
-  connectRedis: vi.fn(),
-  disconnectRedis: vi.fn(),
-  checkRedisHealth: vi.fn().mockResolvedValue(true),
-  redis: {
-    get: vi.fn(),
-    set: vi.fn(),
-    del: vi.fn(),
-    multi: vi.fn(() => ({
-      zremrangebyscore: vi.fn(),
-      zcard: vi.fn(),
-      zadd: vi.fn(),
-      expire: vi.fn(),
-      exec: vi.fn().mockResolvedValue([[null, 1], [null, 1]]) // Mock exec results for rate limit
-    })),
-  },
-  redisSub: {
-    subscribe: vi.fn(),
-    on: vi.fn(),
-    off: vi.fn(),
-  },
-}));
-
-vi.mock('../../src/config/database', () => ({
-  connectDatabase: vi.fn(),
-  disconnectDatabase: vi.fn(),
-  checkDatabaseHealth: vi.fn().mockResolvedValue(true),
-  pool: {
-    query: vi.fn(),
-    connect: vi.fn(() => ({
-      release: vi.fn(),
-    })),
-  },
-}));
-
-vi.mock('../../src/db', () => ({
-  runMigrations: vi.fn(),
-}));
-
-// Mock Queue
-vi.mock('../../src/lib/queue', () => ({
-  enqueueOrder: vi.fn().mockResolvedValue('job-123'),
-  isQueueOverloaded: vi.fn().mockResolvedValue(false),
-  getQueueHealth: vi.fn().mockResolvedValue({ waiting: 0 }),
-}));
 
 describe('API Integration', () => {
   let app: any;
   let request: any;
 
   beforeEach(async () => {
-    vi.clearAllMocks();
+    vi.resetModules();
+    
+    // Dynamic mocks to ensure they apply to the fresh import
+    vi.doMock('../../src/config/redis', () => ({
+      connectRedis: vi.fn(),
+      disconnectRedis: vi.fn(),
+      checkRedisHealth: vi.fn().mockResolvedValue(true),
+      redis: {
+        get: vi.fn(),
+        set: vi.fn(),
+        del: vi.fn(),
+        multi: vi.fn(() => ({
+          zremrangebyscore: vi.fn().mockReturnThis(),
+          zcard: vi.fn().mockReturnThis(),
+          zadd: vi.fn().mockReturnThis(),
+          expire: vi.fn().mockReturnThis(),
+          exec: vi.fn().mockResolvedValue([[null, 1], [null, 1]])
+        })),
+      },
+      redisSub: { subscribe: vi.fn(), on: vi.fn(), off: vi.fn() },
+      redisPub: { publish: vi.fn() },
+    }));
+
+    vi.doMock('../../src/config/database', () => ({
+      connectDatabase: vi.fn(),
+      disconnectDatabase: vi.fn(),
+      checkDatabaseHealth: vi.fn().mockResolvedValue(true),
+      query: vi.fn().mockResolvedValue([{
+        id: 'test-order',
+        status: 'pending',
+        type: 'market',
+        token_in: 'SOL',
+        token_out: 'USDC',
+        amount_in: '1.0',
+        slippage: '0.01',
+        logs: [],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }]),
+      pool: {
+        query: vi.fn(),
+        connect: vi.fn(() => ({ query: vi.fn(), release: vi.fn() })),
+      },
+    }));
+
+    vi.doMock('../../src/lib/queue', () => ({
+      enqueueOrder: vi.fn().mockResolvedValue('job-123'),
+      isQueueOverloaded: vi.fn().mockResolvedValue(false),
+      getQueueHealth: vi.fn().mockResolvedValue({ waiting: 0 }),
+      closeQueue: vi.fn(),
+      ORDER_QUEUE_NAME: 'test-queue',
+      ORDER_CHANNEL_PREFIX: 'order:status:',
+    }));
+
+    vi.doMock('../../src/services/metricsService', () => ({
+      metricsService: {
+        increment: vi.fn(),
+        recordLatency: vi.fn(),
+        setQueueDepth: vi.fn(),
+      },
+    }));
+
+    // Import app after mocks
+    const { buildApp } = await import('../../src/app');
     app = await buildApp();
     await app.ready();
     request = supertest(app.server);
@@ -117,11 +132,6 @@ describe('API Integration', () => {
         .send(payload);
       
       expect(res1.status).toBe(200);
-
-      // We need to mock Redis GET/SET behavior for real idempotency test
-      // Since we mocked Redis completely, we can't test the actual storage/retrieval here easily without a complex mock
-      // But we can verify HEADERS are processed if we spy on middleware.
-      // This integration test mostly verifies the ROUTE connectivity.
     });
   });
 });

@@ -39,7 +39,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"type\": \"MARKET\",\n    \"tokenIn\": \"SOL\",\n    \"tokenOut\": \"USDC\",\n    \"amount\": \"1.5\",\n    \"slippage\": \"0.01\"\n}"
+          "raw": "{\n    \"type\": \"market\",\n    \"tokenIn\": \"SOL\",\n    \"tokenOut\": \"USDC\",\n    \"amount\": \"1.5\",\n    \"slippage\": \"0.01\"\n}"
         },
         "url": {
           "raw": "http://localhost:3000/api/orders/execute",
